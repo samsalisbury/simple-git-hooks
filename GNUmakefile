@@ -12,3 +12,14 @@ $(COPYTHIS)/%: $(SRC)/%
 	cp -f $< $@
 
 generate: $(OUTPUTS)
+
+TESTS := $(shell find . -name '*.test')
+.PHONY: $(TESTS)
+
+$(TESTS):
+	@echo "==> Running test file $@"
+	@export INDENT="$${INDENT:-}  " && cd $$(dirname "$@") && ./$$(basename "$@")
+
+.PHONY: test
+test: $(TESTS)
+	@echo "All tests passed: $^"

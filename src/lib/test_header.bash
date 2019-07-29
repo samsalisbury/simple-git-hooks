@@ -4,6 +4,7 @@
 
 DEBUG="${DEBUG:-}"
 RUN="${RUN:-}"
+export INDENT="${INDENT:-}"
 
 set -euo pipefail
 
@@ -19,8 +20,6 @@ rm -f "$RUN_COUNT_FILE"
 rm -f "$FAIL_COUNT_FILE"
 export SCRIPT_NAME SCRIPT_FILE METADATA RUN_COUNT_FILE FAIL_COUNT_FILE
 
-# Logging functions.
-export INDENT=""
 # shellcheck disable=SC2059 # We need to use a variable as the format arg to printf.
 putf()  {
   FMT="$1"; shift;
