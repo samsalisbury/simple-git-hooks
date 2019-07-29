@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# The list of all possible hooks, taken from
+# https://git-scm.com/book/en/v2/Customizing-Git-Git-Hooks
+HOOKS="pre-commit
+prepare-commit-msg
+commit-msg
+post-commit
+applypatch-msg
+pre-applypatch
+post-applypatch
+pre-rebase
+post-rewrite
+post-checkout
+post-merge
+pre-push
+pre-auto-gc"
+
+log() { echo "==> $1" 1>&2; }
+die() { log "FATAL: $1"; exit 1; }
+
+REPO_ROOT="$(git rev-parse --show-toplevel)" || {
+  die "Unable to get git repo root, are you inside a git repo?"
+}
+
+for HOOK_NAME in $HOOKS; do
+  # If there is no directory containing handlers for this hook,
+  # just skip to the next one.
+  [ -d "$REPO_ROOT/.githooks/$HOOK_NAME" ] || continue
+  log "Installing $HOOK_NAME hooks."
+  HOOK_FILE="$REPO_ROOT/.git/hooks/$HOOK_NAME"
+  echo "#!/usr/bin/env bash" > "$HOOK_FILE"
+  echo "HOOK_NAME=$HOOK_NAME" >> "$HOOK_FILE"
+  echo ". .githooks/run.bash" >> "$HOOK_FILE"
+  echo "# Want to install more $HOOK_NAME hooks?" >> $HOOK_FILE
+  echo "# Copy them to ../../.githooks/$HOOK_NAME/ with a unique name." >> $HOOK_FILE
+  chmod +x "$HOOK_FILE"
+done

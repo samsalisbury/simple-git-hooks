@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+. lib/test_header.bash
+
+make_bash_executable() {
+  echo "#!/usr/bin/env bash" > "$1"
+  echo "$2" >> "$1"
+  chmod +x "$1"
+}
+
+# install_test_hook inits a new git repo, and installs a simple hook handler
+# for the named HOOK, wired up as we expect the install script to wire things
+# up.
+#
+# Parameters:
+#   1: HOOK: Name of the git hook to configure.
+install_hook() {
+  HOOK="$1"
+  git init > /dev/null 2>&1
+  mkdir -p ".githooks/$HOOK"
+  cp "$SCRIPT_FILE" .githooks/
+  make_bash_executable ".git/hooks/$HOOK" "
+    HOOK_NAME=$HOOK
+    . .githooks/run.bash
+  "
+}
+
+# PRE_COMMIT_HOOKS are hooks that are run before a commit, and can fail the commit.
+PRE_COMMIT_HOOKS="pre-commit prepare-commit-msg commit-msg"
+# POST_COMMIT_HOOKS are hooks that are run after a commit, and cannot fail the commit.
+POST_COMMIT_HOOKS="post-commit"
+
+# ALL_COMMIT_HOOKS are all the hooks expected to be invoked during a commit.
+ALL_COMMIT_HOOKS="$PRE_COMMIT_HOOKS $POST_COMMIT_HOOKS"
+
+for HOOK in $ALL_COMMIT_HOOKS; do
+(
+  begin_test "ok/simple/success/$HOOK"
+
+  install_hook "$HOOK"
+
+  # Add a simple hook handler that always succeeds and prints a
+  # line we can check the output of 'git commit' for.
+  make_bash_executable ".githooks/$HOOK/simple-test-handler" "
+    echo Hai from successful $HOOK handler!
+  "
+
+  touch some-file
+  git add some-file
+  if ! GOT="$(git commit -m "test commit" 2>&1)"; then
+    error "simple $HOOK hook failed the commit"
+  fi
+  WANT="Hai from successful $HOOK handler!"
+  assert "simple $HOOK hook handler was run" match "$GOT" "$WANT"
+)
+done
+
+# Test that failures in pre-commit hooks fail the commit.
+for HOOK in $PRE_COMMIT_HOOKS; do
+(
+  begin_test "fail/simple/failure/$HOOK"
+
+  install_hook "$HOOK"
+
+  # Add a simple hook handler that always fails and prints a
+  # line we can check the output of 'git commit' for.
+  make_bash_executable ".githooks/$HOOK/simple-test-handler" "
+    echo Hai from failing $HOOK handler!
+    exit 1
+  "
+
+  touch some-file
+  git add some-file
+  if GOT="$(git commit -m "test commit" 2>&1)"; then
+    error "failing $HOOK hook handler allowed the commit to succeed"
+  fi
+  WANT="Hai from failing $HOOK handler!"
+
+  assert "failing $HOOK hook handler was run" match "$GOT" "$WANT"
+)
+done
+
+# Test that failures in post-commit hooks print a message but do not fail the commit.
+for HOOK in $POST_COMMIT_HOOKS; do
+(
+  begin_test "ok/simple/failure/$HOOK"
+
+  install_hook "$HOOK"
+
+  # Add a simple hook handler that always fails and prints a
+  # line we can check the output of 'git commit' for.
+  make_bash_executable ".githooks/$HOOK/simple-test-handler" "
+    echo Hai from failing $HOOK handler!
+    exit 1
+  "
+
+  touch some-file
+  git add some-file
+  if ! GOT="$(git commit -m "test commit" 2>&1)"; then
+    error "failing $HOOK hook handler failed the commit"
+  fi
+  WANT="Hai from failing $HOOK handler!"
+
+  assert "failing $HOOK hook handler was run" match "$GOT" "$WANT"
+)
+done
